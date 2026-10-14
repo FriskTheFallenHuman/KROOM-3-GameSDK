@@ -1,0 +1,40 @@
+"mod_example"
+{
+	"title"			"Example Mod"
+	"description"	"One-line summary shown in the mod list."
+
+	"type"			"both"          // both | singleplayer_only | multiplayer_only
+
+	"icon"			"icon.png"      // relative to the mod folder
+	"url"			"https://example.com/example_mod"
+	"developer"		"Example Team"
+	"manual"		"docs/manual.pdf"
+
+	// ---------------------------------------------------------------
+	//	Launch options. Each entry is buffered with CMD_EXEC_APPEND
+	//	after the engine has finished initialising, exactly as if we
+	//	typed it into the console on the first frame.
+	// ---------------------------------------------------------------
+	//"commandline"
+	//{
+	//	"+set com_skipIntroVideos 1"
+	//	"+set com_skipLegalScreens 1"
+	//	"+set g_skill 2"
+	//	"+map game/example01"
+	//}
+
+	// ---------------------------------------------------------------
+	// Filesystem overrides. Equivalent to launching with
+	//   +set fs_game_base d3xp +set fs_game example_mod
+	//
+	//   game      -> fs_game_base
+	//   mod       -> fs_game          (defaults to "mod_example")
+	//   skipBase  -> do not mount base/ (standalone mods)
+	// ---------------------------------------------------------------
+	//"filesystem"
+	//{
+	//	"game"      "d3xp"
+	//	"mod"       "example_mod"
+	//	"skipBase"  "0"
+	//}
+}

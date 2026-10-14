@@ -3992,7 +3992,7 @@ void idWeapon::Event_LaunchProjectiles( int num_projectiles, float spread, float
 	// for sound & visual effects. Damage will be handled through reliable messages to the host.
 	const bool isHitscan = projectileDict.GetBool( "net_instanthit" );
 	const bool attackerIsLocal = owner->IsLocallyControlled();
-	const bool forceReplication = projectileDict.GetBool( "net_replicate" ) || projectileEnt->GetEntityDefName() == "projectile_bfg_mp"; // HACK: i don't want to ship modified def files
+	const bool forceReplication = projectileDict.GetBool( "net_replicate" );
 	const bool actuallySpawnProjectile = common->IsServer() || ( attackerIsLocal && !forceReplication ) || isHitscan;
 
 	if( actuallySpawnProjectile )

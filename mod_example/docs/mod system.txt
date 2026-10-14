@@ -1,0 +1,290 @@
+================================================================================
+  Mod Manifest Format (description.txt)
+================================================================================
+
+Every mod folder can contain a file named "description.txt". It tells the engine
+what the mod is called, what it needs, and how to launch it. When the mod is
+installed correctly, the in-game mod menu will read this file automatically.
+
+This document explains the format, field by field, with examples.
+
+--------------------------------------------------------------------------------
+1. WHERE IT GOES
+--------------------------------------------------------------------------------
+
+Place description.txt directly inside the mod folder. For example:
+
+    doom3/
+      base/                 <- the base game
+      mymod/
+        description.txt     <- this file
+        icon.png            <- optional
+        maps/
+        materials/
+        ...
+
+The folder name ("mymod") is what the player will see as the mod's id. If you
+give the folder a different name than the one used in the "mod" field below, the
+engine prefers the "mod" field but still records the folder name in the mod list.
+
+
+--------------------------------------------------------------------------------
+2. BASIC STRUCTURE
+--------------------------------------------------------------------------------
+
+The file is a series of key/value pairs inside one outer block. The outer key
+must be the mod's name, and it must be followed by an opening brace { and a
+closing brace }.
+
+    "mymod"
+    {
+        "title"       "My Mod"
+        "description" "A short summary"
+        ...
+    }
+
+Rules:
+
+  - Everything is case-sensitive for values, but keys are case-insensitive.
+  - Strings must be inside double quotes. No single quotes.
+  - Use // for comments. Everything after // on a line is ignored.
+  - Whitespace, indentation and blank lines are ignored.
+  - The outer key "mymod" must be the first token in the file. If it is not,
+    the file will not be parsed and the mod will show up with just its folder
+    name.
+  - Do not use a BOM (byte-order mark). Save the file as plain UTF-8 or ANSI.
+
+
+--------------------------------------------------------------------------------
+3. FIELDS
+--------------------------------------------------------------------------------
+
+All fields are optional except the outer name. Missing fields fall back to sane
+defaults (usually the folder name).
+
+  title
+      The name shown in the launcher window and in the mod list. If missing,
+      the folder name is used.
+
+        "title" "Doom II for Doom 3"
+
+  description
+      A short one-line summary shown next to the mod in the list. If missing,
+      the title is used. Colour codes are allowed.
+
+        "description" "^1DESOLATED ^8- ^1THE CRYING FATE"
+
+  type
+      What kind of mod this is. Accepted values:
+          "both"                - works in single player and multiplayer
+          "singleplayer_only"   - single player only
+          "multiplayer_only"    - multiplayer only
+
+      If missing, "both" is assumed.
+
+        "type" "singleplayer_only"
+
+  icon
+      Filename of an image to use as the mod's icon. Path is relative to the
+      mod folder. PNG, BMP, JPG, GIF, TGA and ICO are all supported. Square
+      images work best; 32x32 or 64x64 is typical. If missing or unloadable,
+      the game uses its own icon.
+
+        "icon" "icon.png"
+
+  url
+      Website for the mod. Informational only. Shows up in the mod's detail
+      panel in the menu.
+
+        "url" "https://www.moddb.com/mods/my-mod"
+
+  developer
+      Name of the author or team. Informational only. Shows up in the mod's
+      detail panel in the menu.
+
+        "developer" "Example Team"
+
+  manual
+      Path to a readme or manual, relative to the mod folder. Informational
+      only.
+
+        "manual" "docs/manual.pdf"
+
+
+--------------------------------------------------------------------------------
+4. THE "commandline" BLOCK
+--------------------------------------------------------------------------------
+
+Optional. A list of console commands that the engine runs automatically right
+after startup, as if the player had typed them into the console.
+
+Every entry is one line. The syntax is exactly the same as the in-game console
+or a cfg file:
+
+    +set <cvar> <value>     change a cvar
+    +map <mapname>          load a map immediately
+    +exec <file.cfg>        run a config file
+    +<command>              any other console command
+
+Example:
+
+    "commandline"
+    {
+        "+set com_skipIntroVideos 1"
+        "+set com_skipLegalScreens 1"
+        "+set g_skill 2"
+        "+map game/example01"
+    }
+
+Each entry runs in order, after the game has finished loading. This is the same
+as typing them into the console one after another.
+
+If you do not need any custom commands, omit this block entirely.
+
+--------------------------------------------------------------------------------
+5. THE "filesystem" BLOCK
+--------------------------------------------------------------------------------
+
+Optional. Tells the engine how to mount your mod's files. This is what the old
+.bat launchers used to do with "+set fs_game_base ... +set fs_game ...".
+
+    "filesystem"
+    {
+        "game"      "d3xp"
+        "mod"       "mymod"
+        "skipBase"  "0"
+    }
+
+  game
+      A parent mod to load underneath yours. Most commonly "d3xp" for mods
+      built on Resurrection of Evil, or "d3lm" for The Lost Missions.
+	  Leave this line out if your mod only depends on the base game.
+
+  mod
+      The folder name of your mod. Defaults to the outer key of the file. You
+      normally do not need to specify this unless the folder name and the
+      outer key differ.
+
+  skipBase
+      Set to "1" to prevent the engine from loading the base/ folder at all.
+      Use this only for standalone total conversions that ship their own
+      replacements for everything the game normally provides. Otherwise leave
+      it "0".
+
+If you do not need any filesystem overrides, omit the whole block.
+
+
+--------------------------------------------------------------------------------
+6. COLOUR CODES
+--------------------------------------------------------------------------------
+
+You can use the standard Doom 3 colour codes inside the description field. They
+look like "^1", "^2", etc. Once the code is placed, all following text uses that
+colour until another code appears.
+
+    ^0  default
+    ^1  red
+    ^2  green
+    ^3  yellow
+    ^4  blue
+    ^5  cyan
+    ^6  orange
+    ^7  white
+    ^8  gray
+
+Example:
+
+    "description" "^1DESOLATED ^8-^1 THE CRYING FATE ^8v1.0"
+
+Most in-game menus parse these codes correctly. Console output
+(listMods, etc.) also handles them.
+
+--------------------------------------------------------------------------------
+7. FULL EXAMPLE
+--------------------------------------------------------------------------------
+
+Here is a fully-featured manifest using every field and block. Use this as a
+starting point and delete the lines you do not need.
+
+    "example_mod"
+    {
+        // ---------------------------------------------------------------
+        // Presentation
+        // ---------------------------------------------------------------
+        "title"         "Example Mod"
+        "description"   "A short one-line summary shown in the mod list."
+
+        "type"          "both"          // both | singleplayer_only | multiplayer_only
+
+        "icon"          "icon.png"      // relative to the mod folder
+        "url"           "https://example.com/example_mod"
+        "developer"     "Example Team"
+        "manual"        "docs/manual.pdf"
+
+        // ---------------------------------------------------------------
+        // Launch options. Each entry runs on the console after the engine
+        // has finished loading, in the order listed.
+        // ---------------------------------------------------------------
+        "commandline"
+        {
+            "+set com_skipIntroVideos 1"
+            "+set com_skipLegalScreens 1"
+            "+set g_skill 2"
+            "+map game/example01"
+        }
+
+        // ---------------------------------------------------------------
+        // Filesystem overrides. Equivalent to launching with
+        //   +set fs_game_base d3xp +set fs_game example_mod
+        // but declared here so a .bat file is not needed.
+        // ---------------------------------------------------------------
+        "filesystem"
+        {
+            "game"      "d3xp"
+            "mod"       "example_mod"
+            "skipBase"  "0"
+        }
+    }
+
+
+--------------------------------------------------------------------------------
+8. COMMON MISTAKES
+--------------------------------------------------------------------------------
+
+  - Forgetting the outer key or the opening brace. The parser needs
+    "name" { ... } exactly. Just a list of key/value pairs will not work.
+
+  - Saving the file with a BOM. Some text editors (especially Notepad on
+    Windows) prepend a hidden marker when saving as "UTF-8 with BOM". The
+    engine will not parse the file. Save as plain UTF-8 or ANSI.
+
+  - Using single quotes. Only double quotes are allowed.
+
+  - Using uppercase cvar names by mistake in commandline. Console cvars are
+    case-sensitive: "+set G_skill 2" is not the same as "+set g_skill 2".
+
+  - Putting the icon path inside the filesystem block. It goes at the top
+    level, not inside filesystem.
+
+  - Setting skipBase to 1 on a mod that still relies on the base game's
+    assets. The mod will load with missing textures, sounds, and maps.
+
+
+--------------------------------------------------------------------------------
+9. QUICK REFERENCE
+--------------------------------------------------------------------------------
+
+  "title"         display name
+  "description"   one-line summary
+  "type"          both | singleplayer_only | multiplayer_only
+  "icon"          image filename relative to mod folder
+  "url"           website
+  "developer"     author or team
+  "manual"        readme or manual path
+
+  "commandline" { ... }     console commands to run on launch
+  "filesystem"  { ... }     fs_game / fs_game_base / skipBase overrides
+
+  // comments
+  ^N colour codes inside any string
+  Save as UTF-8 without BOM.

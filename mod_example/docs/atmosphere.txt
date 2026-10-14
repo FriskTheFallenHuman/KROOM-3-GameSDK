@@ -1,0 +1,291 @@
+================================================================================
+Atmosphere Declaration (.atmos) Guide
+================================================================================
+
+ This document explains how to create and edit atmosphere declarations
+ for KROOM 3: BFG Edition. An atmosphere decl controls the sky, clouds, and
+ fog that appear in a map.
+
+-------------------------------------------------------------------------------
+1. BASIC SYNTAX
+-------------------------------------------------------------------------------
+
+ An atmosphere declaration looks like this:
+
+   atmos <name> {
+       // top-level keys
+       // clouds { ... }
+       // fog { ... }
+   }
+
+ Example:
+
+   atmos my_sky {
+       skyMaterial textures/sky/sky1
+       skyTint 1 1 1
+       zenithColor 0.16 0.28 0.48
+       horizonColor 0.55 0.62 0.72
+       intensity 1.0
+       grade 1.0
+       portalSky behind
+
+       clouds {
+           enabled 1
+           heightMin 2600
+           heightMax 7600
+           scale 0.00021
+           coverage 0.30
+           density 0.5
+           opacity 0.78
+           seed 12000
+           color auto
+           wind 55 -18
+           volume 0.65
+       }
+
+       fog {
+           enabled 1
+           color auto
+           opacity 0.36
+           height 0.30
+           power 1.15
+       }
+   }
+
+ Comments use // or /* */.
+
+ All keys are optional. If you omit a key, its default value is used.
+ Colors can be written as 0..1 floats or 0..255 integers.
+
+-------------------------------------------------------------------------------
+2. TOP-LEVEL KEYS
+-------------------------------------------------------------------------------
+
+ skyMaterial <material>
+   Optional. A material used as the sky dome (2D equirect or cube map).
+   If omitted, the engine draws a simple gradient sky using zenithColor
+   and horizonColor.
+   If the material is not found, a warning is printed and the gradient
+   sky is used instead.
+   Default: none (gradient sky)
+
+ skyTint <r g b>
+   Multiplies the sky material's colors. Only useful when skyMaterial is set.
+   Default: 1 1 1
+
+ zenithColor <r g b>
+   Color at the top of the gradient sky (zenith).
+   Default: 0.16 0.28 0.48
+
+ horizonColor <r g b>
+   Color at the horizon of the gradient sky.
+   Default: 0.55 0.62 0.72
+
+ intensity <float>
+   Linear HDR brightness multiplier for the whole atmosphere.
+   Higher values make the sky brighter.
+   Minimum: 0.0
+   Default: 1.0
+
+ grade <float>
+   S-curve contrast grade strength.
+   0 = no grading, 1 = full grading.
+   Clamped to 0..1.
+   Default: 1.0
+
+ portalSky <behind | replace | off>
+   Controls how the atmosphere interacts with a portal sky (a skybox room
+   that is rendered through a portal).
+
+   behind   – The sky dome and clouds are rendered inside the portal sky
+              pass, behind the sky room. This is the normal behaviour.
+   replace  – The portal sky pass is skipped, and the atmosphere replaces it.
+   off      – No atmosphere is drawn while a portal sky is active.
+
+   Default: behind
+
+-------------------------------------------------------------------------------
+3. CLOUDS BLOCK
+-------------------------------------------------------------------------------
+
+ clouds {
+     enabled <bool>
+       Turn clouds on or off.
+       Default: 1 (true)
+
+     heightMin <float>
+       Bottom of the cloud layer, in units above the player's eye.
+       Default: 2600
+
+     heightMax <float>
+       Top of the cloud layer, in units above the player's eye.
+       If heightMax is less than heightMin + 64, it is automatically
+       raised to heightMin + 64.
+       Default: 7600
+
+     scale <float>
+       Noise scale for the cloud shapes. Smaller values = larger clouds.
+       Minimum: 0.00001
+       Default: 0.00021
+
+     coverage <float>
+       Cloud coverage from 0 to 1. Lower values produce denser, more
+       overcast skies. Higher values produce thinner, broken clouds.
+       Clamped to 0..1.
+       Default: 0.30
+
+     density <float>
+       Overall cloud density. Higher values make clouds thicker.
+       Minimum: 0.0
+       Default: 0.5
+
+     opacity <float>
+       Cloud opacity from 0 to 1. 0 = invisible clouds, 1 = fully opaque.
+       Clamped to 0..1.
+       Default: 0.78
+
+     seed <float>
+       Random seed for the cloud noise. Change this to get a different
+       cloud pattern.
+       Default: 12000.0
+
+     color <auto | r g b>
+       Cloud color. Use "auto" to automatically use the average color of
+       the sky material (or the horizon color if no sky material is set).
+       You can also specify an explicit color as three floats (0..1 or 0..255).
+       Default: auto
+
+     wind <x y>
+       Wind speed in units per second. Moves the clouds over time.
+       Default: 55 -18
+
+     volume <float>
+       Cloud self-shadowing strength from 0 to 1. Higher values make the
+       clouds look more volumetric and shaded.
+       Clamped to 0..1.
+       Default: 0.65
+ }
+
+-------------------------------------------------------------------------------
+4. FOG BLOCK
+-------------------------------------------------------------------------------
+
+ fog {
+     enabled <bool>
+       Turn horizon fog on or off.
+       Default: 1 (true)
+
+     color <auto | r g b>
+       Fog color. Use "auto" to automatically use the average color of
+       the sky material (or the horizon color if no sky material is set).
+       You can also specify an explicit color as three floats (0..1 or 0..255).
+       Default: auto
+
+     opacity <float>
+       Fog opacity from 0 to 1. 0 = no fog, 1 = fully opaque.
+       Clamped to 0..1.
+       Default: 0.36
+
+     height <float>
+       View ray Z height where the fog fades out. Smaller values keep the
+       fog closer to the horizon.
+       Minimum: 0.01
+       Default: 0.30
+
+     power <float>
+       Falloff power for the fog. Higher values make the fog fade out
+       more sharply.
+       Minimum: 0.25
+       Default: 1.15
+ }
+
+-------------------------------------------------------------------------------
+5. EXAMPLES
+-------------------------------------------------------------------------------
+
+ 1. Simple gradient sky with clouds and fog:
+
+    atmos clear_day {
+        zenithColor 0.16 0.28 0.48
+        horizonColor 0.55 0.62 0.72
+        intensity 1.0
+        grade 1.0
+
+        clouds {
+            enabled 1
+            coverage 0.25
+            color auto
+        }
+
+        fog {
+            enabled 1
+            color auto
+            opacity 0.35
+        }
+    }
+
+ 2. Sky material with a tint, no clouds, light fog:
+
+    atmos red_dusk {
+        skyMaterial textures/sky/dusk
+        skyTint 1.0 0.6 0.5
+        intensity 1.2
+        grade 0.8
+
+        clouds {
+            enabled 0
+        }
+
+        fog {
+            enabled 1
+            color 0.8 0.4 0.3
+            opacity 0.25
+            height 0.35
+            power 1.0
+        }
+    }
+
+ 3. Overcast, dense clouds, heavy fog:
+
+    atmos storm {
+        zenithColor 0.1 0.1 0.12
+        horizonColor 0.3 0.3 0.32
+        intensity 0.9
+
+        clouds {
+            enabled 1
+            coverage 0.10
+            density 0.8
+            opacity 0.9
+            volume 0.8
+            color 0.4 0.4 0.45
+            wind 120 -40
+        }
+
+        fog {
+            enabled 1
+            color 0.3 0.3 0.32
+            opacity 0.6
+            height 0.20
+            power 1.5
+        }
+    }
+
+-------------------------------------------------------------------------------
+6. NOTES
+-------------------------------------------------------------------------------
+
+ - All keys are optional. You only need to specify what you want to change
+   from the defaults.
+
+ - Colors accept either 0..1 floating point values or 0..255 integer values.
+   For example, "1 0.5 0" and "255 128 0" are equivalent.
+
+ - "auto" for cloud or fog color uses the average color of the sky material.
+   If no sky material is used, it falls back to the horizon color.
+
+ - Unknown keys produce a warning and are ignored. This makes it safe to
+   add new keys in the future.
+
+ - The atmosphere decl is parsed when the map loads. Changes require a
+   map reload or a decl reload to take effect.

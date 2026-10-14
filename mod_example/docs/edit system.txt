@@ -1,0 +1,456 @@
+================================================================================
+THE .EDIT FILE SYSTEM
+================================================================================
+
+--------------------------------------------------------------------------------
+1. WHAT IS AN .edit FILE AND WHY DOES IT EXIST?
+--------------------------------------------------------------------------------
+
+Doom 3 maps are compiled .map files. When you edit a light in-game, move a
+ragdoll, or save a spawned entity, the game needs to store those changes
+somewhere. There are two cases:
+
+  Case A - The .map file lives directly on the disk.
+           The game patches the loaded map and writes it back out
+           as a normal .map file. Same as always.
+
+  Case B - The .map file lives inside a .resources or .pk4 container.
+           The container is read-only at runtime, so the game can't rewrite
+           it. Instead, the changes go into a sibling file called <map>.edit.
+
+The .edit file is a small overlay. On the next map load, the game reads the
+base .map first, then applies the .edit on top of it.
+
+The game picks which path to use automatically. You don't choose. If the
+.map is on disk, edits go to the .map. If it isn't, edits go to the .edit.
+
+--------------------------------------------------------------------------------
+2. WHEN IS THE .edit FILE READ?
+--------------------------------------------------------------------------------
+
+When the game loads a map, it does the following, in order:
+
+  1. Parses the base .map (or .reg) file.
+  2. Runs some post-processing on the entity list (removeEntities,
+     overrideMaterial, moveFuncGroups, forceEntityNames).
+  3. Records how many entities came from the base .map. This number is
+     called numBaseEntities.
+  4. If <map>.edit exists, reads it and applies its operations.
+
+Step 3 is important. Every reference inside the .edit file refers to the
+base entity list, before any .edit operations are applied. The numBaseEntities
+snapshot protects against a .edit file referencing entities that don't exist.
+
+--------------------------------------------------------------------------------
+3. THE FILE FORMAT
+--------------------------------------------------------------------------------
+
+The file is plain text. It looks like this:
+
+    "map_name"
+    {
+        "version" "1"
+
+        "add"
+        {
+            "entity 0"
+            {
+                "classname" "env_probe"
+                "name" "probe_01"
+                "origin" "100 200 50"
+            }
+        }
+
+        "modify"
+        {
+            "worldspawn"
+            {
+                "music" "sound/music/boss.ogg"
+            }
+            "ceiling_light"
+            {
+                "origin" "0 0 160"
+                "light_radius" "512 512 512"
+            }
+        }
+
+        "remove"
+        {
+            "console"
+            "entity 42"
+        }
+    }
+
+Every key and value is a quoted string. Lines starting with // and blocks
+between /* */ are comments and get ignored. Whitespace doesn't matter.
+
+--------------------------------------------------------------------------------
+4. THE FOUR PARTS OF THE FILE
+--------------------------------------------------------------------------------
+
+PART 1: THE HEADER
+
+    "map_name"
+
+This is the name of the map, without a path and without an extension.
+It's informational. The parser doesn't check it against anything.
+
+    "version" "1"
+
+Reserved for future format changes. Current value is always "1".
+
+PART 2: "add" SECTION
+
+Holds entities that don't exist in the base .map. On load, they're appended
+to the entity list.
+
+The label on each block (the string right before the opening brace) is
+purely cosmetic for add blocks. The reader ignores it. The writer normally
+emits the entity's name so the file is easy to read, but you can put any
+string there.
+
+PART 3: "modify" SECTION
+
+Holds key/value changes applied to existing base-map entities. Each block
+references a base entity either by its name or by "entity N" where N is the
+base index.
+
+PART 4: "remove" SECTION
+
+Holds references to base-map entities that should be deleted on load.
+
+All four parts are optional. An empty section is valid and does nothing.
+Section order doesn't matter either - the reader processes them as it finds
+them.
+
+--------------------------------------------------------------------------------
+5. HOW ENTITIES ARE REFERENCED
+--------------------------------------------------------------------------------
+
+There are three ways to reference an entity in modify or remove:
+
+  "worldspawn"
+      Always means the world entity. It's always the first entity in a Doom 3
+      .map file (index 0), and it never has a "name" key, so it gets its own
+      token. Worldspawn can only appear in modify. The reader refuses to add
+      or remove it.
+
+  "entity N"
+      N is the position of the entity in the base .map's entity list. Index 0
+      is worldspawn, index 1 is the second entity, and so on. This is fragile
+      because if you reorder entities in the base .map, the indices shift and
+      your .edit file points at the wrong things.
+
+  "some_entity_name"
+      Any other string is looked up against the "name" key of every base
+      entity. If a match is found, that's the target. This is the recommended
+      form whenever the entity has a name.
+
+Both index-based and name-based references are accepted by the reader. The
+writer prefers names whenever the entity has one.
+
+For add blocks, the label has no meaning. It's displaying only.
+
+--------------------------------------------------------------------------------
+6. MODIFY SEMANTICS
+--------------------------------------------------------------------------------
+
+Each modify (or add) block is a bag of "key" "value" pairs. When the reader
+applies a block:
+
+  - A non-empty value sets the key on the entity.
+  - An EMPTY value deletes the key from the entity.
+
+So this:
+
+    "ceiling_light"
+    {
+        "origin" "0 0 160"
+        "noshadows" ""
+    }
+
+moves the ceiling light and removes its noshadows key in one go.
+
+If a key is set to the same value it already has, nothing happens. The
+debug log doesn't even mention it, because there was no change.
+
+One special rule: the reader refuses to change the "classname" key on
+worldspawn. This prevents an .edit file from accidentally reclassifying
+the world entity.
+
+--------------------------------------------------------------------------------
+7. THE WORLD SPAWN SPECIAL CASE
+--------------------------------------------------------------------------------
+
+Worldspawn is the map's global settings entity. It has no name, so you
+can't reference it by name. The .edit format gives it its own token:
+
+    "modify"
+    {
+        "worldspawn"
+        {
+            "music" "sound/music/boss.ogg"
+            "gravity" "600"
+        }
+    }
+
+Worldspawn cannot be added. It cannot be removed. Its classname cannot be
+changed. The reader and writer both enforce this on every side.
+
+--------------------------------------------------------------------------------
+8. ADD SEMANTICS AND NAMING
+--------------------------------------------------------------------------------
+
+When the game saves an entity to an .edit file, it classifies it as either
+add or modify:
+
+  - If the entity has a "name" that matches a base-map entity -> modify.
+  - If the entity has classname "worldspawn" and the base map has a
+    worldspawn -> modify.
+  - Otherwise -> add.
+
+Before inserting a new state, the writer removes any previous entry for the
+same entity. So saving the same light twice produces one modify block, not
+two.
+
+For added entities, the writer prefers to emit the entity's name as the
+block label so the file is readable. If the entity has no name, it emits
+"entity N" where N is a local index (0, 1, 2, ... within the add section).
+The reader ignores this label.
+
+Important: an add block with an empty "name" key ("name" "") is a bug.
+The entity will spawn but you'll never be able to reference it later. The
+converter tool catches these and fills in a generated name.
+
+--------------------------------------------------------------------------------
+9. WHAT THE READER REFUSES TO DO
+--------------------------------------------------------------------------------
+
+For safety, the reader silently skips these operations and prints a warning:
+
+  - Adding worldspawn.
+  - Adding any entity whose classname is "worldspawn".
+  - Removing worldspawn by name.
+  - Removing "entity 0" (which is worldspawn).
+  - Changing worldspawn's classname.
+  - Modifying an entity whose index is out of range.
+  - Modifying an entity whose name doesn't resolve.
+
+None of these abort the load. The map still loads. But you'll see a warning
+in the console and the operation will be skipped.
+
+--------------------------------------------------------------------------------
+10. HOW THE GAME WRITES TO .EDIT
+--------------------------------------------------------------------------------
+
+Several console commands save entity states:
+
+  saveSelected        - the currently dragged entity
+  saveMoveables       - all non-bound idMoveable entities
+  saveRagdolls        - all non-bound articulated figures
+  saveLights          - all idLight entities
+  saveEnvprobes       - all idEnvProbes entities
+  saveParticles       - all static entities with a .prt model
+
+Each one follows the same pattern:
+
+  if ( the base .map is on disk )
+  {
+      patch the in-memory level map and write <map>.map
+  }
+  else
+  {
+      write <map>.edit
+  }
+
+The game checks whether the .map is on disk by looking at the file system
+directly, ignoring any containers. If a physical file exists, it's writable
+and gets used. Otherwise the .edit path kicks in.
+
+If an entity has no name when the command runs, the game generates one like
+"light_17" or "env_probe_4" before saving. This makes the entity referenceable
+in the .edit file.
+
+--------------------------------------------------------------------------------
+11. EXAMPLE
+--------------------------------------------------------------------------------
+
+Say the base map (in a .pk4) has this worldspawn and these two entities:
+
+    Version 3
+
+    // entity 0
+    {
+        "classname" "worldspawn"
+        "music" "sound/music/ambient.ogg"
+    }
+
+    // entity 1
+    {
+        "classname" "light"
+        "name" "ceiling_light"
+        "origin" "0 0 128"
+        "light_radius" "256 256 256"
+    }
+
+    // entity 2
+    {
+        "classname" "func_static"
+        "name" "console"
+        "model" "models/mapobjects/console.lwo"
+    }
+
+You play the map. You move the ceiling light up 32 units. You spawn a new
+env_probe at 128 -64 48. You delete the console. You run saveLights,
+saveSelected, and saveEnvprobes.
+
+The game writes maps/mymap.edit:
+
+    "mymap"
+    {
+        "version" "1"
+
+        "add"
+        {
+            "entity 0"
+            {
+                "classname" "env_probe"
+                "name" "env_probe_0"
+                "origin" "128 -64 48"
+            }
+        }
+
+        "modify"
+        {
+            "ceiling_light"
+            {
+                "classname" "light"
+                "name" "ceiling_light"
+                "origin" "0 0 160"
+                "light_radius" "256 256 256"
+            }
+        }
+
+        "remove"
+        {
+            "console"
+        }
+    }
+
+Note that worldspawn was never touched, so it doesn't appear. The ceiling
+light is referenced by name, not by index. The env_probe went to add
+because it wasn't in the base map.
+
+On next load:
+
+  1. The base .map loads as normal: worldspawn, ceiling_light, console.
+  2. The .edit file is read. numBaseEntities is 3.
+  3. "add entity 0" appends the env_probe. It becomes entity 3.
+  4. "modify ceiling_light" finds the base entity by name and moves it.
+  5. "remove console" finds the base entity by name and deletes it.
+  6. The final entity list is: worldspawn, ceiling_light (moved), env_probe.
+
+--------------------------------------------------------------------------------
+12. WHY NAMES ARE BETTER THAN INDICES
+--------------------------------------------------------------------------------
+
+You can reference a base entity with "entity 1" or with "ceiling_light".
+Both work. But they behave very differently when the base map changes:
+
+  - If you reorder or insert entities in the base .map, all the "entity N"
+    references shift. Your .edit file will silently point at the wrong
+    entities.
+
+  - Names are stable. Adding or reordering entities doesn't affect them.
+    As long as the target entity keeps its "name", the .edit file still
+    works.
+
+The writer always prefers names whenever the entity has one. Index-based
+references are only used as a last resort, for base entities that never got
+a name.
+
+--------------------------------------------------------------------------------
+13. FILE EXISTENCE CHECK
+--------------------------------------------------------------------------------
+
+To decide between writing a .map and writing a .edit, the game uses a
+function called IsFileOnDisk. It walks the search paths looking for a
+physical file. It ignores .resources and .pk4 containers.
+
+If IsFileOnDisk returns true, the .map is writable and the game uses it.
+If it returns false, the game falls back to .edit.
+
+There is no way to force .edit output if the .map is on disk, and no way
+to force .map output if it isn't. The distinction is automatic.
+
+--------------------------------------------------------------------------------
+14. THE DEBUG CVAR
+--------------------------------------------------------------------------------
+
+The game has a cvar called map_editDebug. Set it to 1 in the console and
+the reader will print every operation it performs:
+
+    [EDIT] applying maps/mymap.edit
+    [EDIT]   map: mymap
+    [EDIT]   version: 1
+    [EDIT]   -- add section --
+    [EDIT]     + env_probe "env_probe_0" (new index 3)
+    [EDIT]         classname = "env_probe"
+    [EDIT]         name = "env_probe_0"
+    [EDIT]         origin = "128 -64 48"
+    [EDIT]   -- modify section --
+    [EDIT]     ~ "ceiling_light" (entity 1, light)
+    [EDIT]         origin: "0 0 128" -> "0 0 160"
+    [EDIT]   -- remove section --
+    [EDIT]     - entity 2 (func_static "console")
+    [EDIT] done: +1 added, ~1 modified, -1 removed (3 entities total)
+
+This is the fastest way to diagnose why an .edit file isn't having the
+effect you expect. It tells you:
+
+  - Which entities were found.
+  - Which keys changed and what their old values were.
+  - Which operations were refused or skipped.
+  - How many of each type of operation actually took effect.
+
+Set map_editDebug 0 to turn it off. Default is off.
+
+--------------------------------------------------------------------------------
+15. SUMMARY OF RULES
+--------------------------------------------------------------------------------
+
+  .edit file lives next to <map>.map but is only read when the base map
+  isn't writable on disk.
+
+  The reader applies add, modify, and remove sections in the order it
+  finds them. Section order doesn't matter in practice.
+
+  Entity references can be names, "entity N", or "worldspawn". Names are
+  preferred but indices are accepted.
+
+  All references in modify and remove point at the base map's entities,
+  not at entities that were added by the same .edit file.
+
+  Worldspawn can only be modified. Never added, never removed, and its
+  classname can never change.
+
+  An empty value in a modify block deletes the key.
+
+  The writer classifies a state as modify if it matches a base entity by
+  name (or is worldspawn), otherwise it goes to add.
+
+  Repeated saves of the same entity are idempotent. Old entries are
+  removed before new ones are written.
+
+  map_editDebug 1 in the console shows you everything the reader does.
+
+--------------------------------------------------------------------------------
+16. FILE EXTENSION AND NAMING
+--------------------------------------------------------------------------------
+
+  <map>.map         the base compiled map file
+  <map>.edit        the overlay file that this document describes
+  <map>_extra_ents.map    the OLD overlay format, deprecated and replaced
+
+The old _extra_ents.map format is no longer read by the game. If you have
+maps using it, you may need to manually copy the new entities to a edit file.
